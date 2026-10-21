@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LASC Record Book Publisher</title>
+<style>
+:root{font-family:system-ui,Segoe UI,Arial,sans-serif;color:#173858;background:#f3f6fa}
+*{box-sizing:border-box}body{margin:0}.shell{max-width:980px;margin:35px auto;padding:0 18px}
+header{background:#163b62;color:white;padding:24px 28px;border-radius:14px}header h1{margin:0;font-size:25px}header p{margin:7px 0 0;color:#d8e5f2}
+.panel{background:white;border:1px solid #d9e2eb;border-radius:12px;padding:22px;margin:18px 0}
+h2{font-size:18px;margin:0 0 14px}.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+button,.upload{background:#163b62;color:white;border:0;border-radius:7px;padding:11px 16px;font-size:14px;cursor:pointer}
+button:disabled{background:#aeb9c5;cursor:not-allowed}input[type=file]{max-width:100%}
+.metrics{display:flex;gap:14px;flex-wrap:wrap}.metric{padding:12px 20px;background:#f2f6fa;border-radius:8px;min-width:135px}
+.metric strong{display:block;font-size:24px}.muted{color:#62778b;font-size:13px}.error{color:#9c2c2c}.success{color:#17613d}
+#issues{white-space:pre-wrap;max-height:250px;overflow:auto;font-size:13px}
+#book{display:none}.page{background:white;color:#163b62;width:297mm;height:210mm;padding:0 8mm 8mm;break-after:page;page-break-after:always;overflow:hidden;position:relative}
+.pagehead{height:19mm;margin:0 -8mm 6mm;background:#163b62;color:white;padding:6mm 8mm 0;display:flex;justify-content:space-between;align-items:flex-start}
+.pagehead strong{font-size:15pt}.pagehead span{font-size:9pt}.subtitle{font-size:11pt;font-weight:bold;margin-bottom:3mm}
+.matrix{width:100%;border-collapse:collapse;table-layout:fixed}.matrix thead{background:#163b62;color:white}
+.matrix th{font-size:8pt;height:8mm}.matrix th:first-child{width:31mm;text-align:left;padding-left:2mm}
+.matrix td{height:10.6mm;text-align:center;vertical-align:middle;border-left:.35pt solid #d5dfe8;padding:0 .5mm}
+.matrix td:first-child{text-align:left;font-size:8pt;font-weight:bold;border-left:0;padding-left:2mm}
+.matrix tbody tr:nth-child(even){background:#f1f5f9}
+.matrix tr.stroke-start td{border-top:1pt solid #a7b9ca}
+.cell-time{font-size:7.5pt;font-weight:700;white-space:nowrap}
+.cell-name{font-size:6.4pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell-meet{font-size:5.3pt;color:#718397;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.foot{position:absolute;bottom:4mm;right:8mm;color:#718397;font-size:7pt}
+@page{size:A4 landscape;margin:0}
+@media print{html,body{background:white;margin:0;padding:0}.shell{display:none!important}#book{display:block!important}.page:last-child{break-after:auto;page-break-after:auto}}
+@media screen{#book.preview{display:block}.page{margin:20px auto;box-shadow:0 2px 15px #bcc6d0;transform-origin:top center}}
+</style></head><body>
+<main class="shell">
+<header><h1>LASC Record Book Publisher</h1><p>Import an Airtable CSV, validate active records and publish the compact record matrix.</p></header>
+<section class="panel"><h2>1. Select current records CSV</h2>
+<div class="controls"><input id="file" type="file" accept=".csv,text/csv"><button id="validate" disabled>Validate records</button></div>
+<p class="muted">All processing happens in this browser. Your CSV is not sent to GitHub Pages or another server.</p></section>
+<section class="panel"><h2>2. Validation</h2><div class="metrics">
+<div class="metric"><strong id="count">—</strong><span class="muted">Active records</span></div>
+<div class="metric"><strong id="dups">—</strong><span class="muted">Duplicate categories</span></div>
+<div class="metric"><strong id="status">Waiting</strong><span class="muted">Publication status</span></div></div>
+<p id="issues" aria-live="polite">Select a CSV to begin.</p>
+<button id="downloadIssues" disabled>Download validation report</button></section>
+<section class="panel"><h2>3. Publish PDF</h2><p class="muted">Uses A4 landscape, stroke-first order, vertical dividers and compact meet names. Licensed reports show ages 8 and up.</p>
+<div class="controls"><button id="publish" disabled>Open print / Save as PDF</button><button id="preview" disabled>Preview pages</button></div>
+<p class="muted">In the print dialogue select <b>Save as PDF</b>, <b>A4</b>, <b>Landscape</b>, <b>Margins: None</b>, <b>Scale: 100%</b> and enable <b>Background graphics</b>. Disable browser headers and footers.</p>
+</section><p class="muted">LASC Record Book Publisher • Version 1.0 • Offline-capable once downloaded as an HTML file</p>
+</main><div id="book"></div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+let records=[],issues=[],pages=0;
+const required=['RecordId','Type','Pool','Gender','Age Group','Stroke','Distance','Swimmer Name','Meet','Record Time','Status'];
+const strokeOrder={'Backstroke':0,'Breaststroke':1,'Butterfly':2,'Front Crawl':3,'Freestyle':3,'Medley':4,'Individual Medley':4};
+function csvParse(s){
+  if(s.charCodeAt(0)===65279)s=s.slice(1);
+  const rows=[];let row=[],field='',quote=false;
+  for(let i=0;i<s.length;i++){const ch=s[i];
+    if(quote){if(ch==='"'&&s[i+1]==='"'){field+='"';i++}else if(ch==='"')quote=false;else field+=ch}
+    else if(ch==='"')quote=true;else if(ch===','){row.push(field);field=''}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&s[i+1]==='\n')i++;row.push(field);if(row.some(x=>x!==''))rows.push(row);row=[];field=''}
+    else field+=ch;
+  }
+  if(quote)throw Error('CSV contains an unclosed quoted field');
+  row.push(field);if(row.some(x=>x!==''))rows.push(row);
+  if(!rows.length)throw Error('CSV is empty');
+  const headers=rows.shift().map(x=>x.trim());
+  const missing=required.filter(x=>!headers.includes(x));if(missing.length)throw Error('Missing columns: '+missing.join(', '));
+  return rows.map((values,i)=>({line:i+2,data:Object.fromEntries(headers.map((h,j)=>[h,values[j]??'']))}));
+}
+function timeSeconds(raw){
+ let s=raw.trim();if(/^\d{1,2}\.\d{2}\.\d{2}$/.test(s)){const a=s.split('.');s=`${a[0]}:${a[1]}.${a[2]}`}
+ const m=s.match(/^(\d{1,2}):([0-5]\d)\.(\d{2})$/);
+ if(!m)throw Error('invalid time: '+raw);
+ const seconds=Number(m[1])*60+Number(m[2])+Number(m[3])/100;
+ if(seconds<=0)throw Error('time must be positive');
+ return {seconds,display:s};
+}
+function validate(text){
+ const rows=csvParse(text),output=[],errs=[],seen=new Map();
+ for(const {line,data:r} of rows){
+   if(!['approved','active'].includes(r.Status.trim().toLowerCase()))continue;
+   try{
+     const pool=r.Pool.trim().toUpperCase(),type=r.Type.trim(),gender=r.Gender.trim(),age=Number(r['Age Group']);
+     const stroke=r.Stroke.trim(),distance=Number(r.Distance.trim().replace(/m$/i,''));
+     const {seconds,display}=timeSeconds(r['Record Time']);
+     if(!['SC','LC'].includes(pool)||!['Licensed','Unlicensed'].includes(type)||!['Girls','Boys'].includes(gender)||!Number.isInteger(age)||age<1||age>99||!(stroke in strokeOrder)||!Number.isInteger(distance)||distance<=0)throw Error('invalid category, age, stroke or distance');
+     if(!r['Swimmer Name'].trim()||!r.Meet.trim())throw Error('missing swimmer or meet');
+     const item={...r,pool,type,gender,age,stroke,distance,seconds,time:display};
+     output.push(item);
+     const key=[pool,type,gender,age,stroke,distance].join('|');
+     if(!seen.has(key))seen.set(key,[]);seen.get(key).push(item);
+   }catch(e){errs.push(`Line ${line} (${r.RecordId||'no ID'}): ${e.message}`)}
+ }
+ let dupCount=0;
+ for(const [key,items] of seen)if(items.length>1){dupCount++;errs.push(`Duplicate ${key.replaceAll('|',' / ')}: IDs ${items.map(x=>x.RecordId).join(', ')}`)}
+ if(!output.length)errs.push('No active/approved records found');
+ return {output,errs,dupCount};
+}
+function el(tag,cls,text){const x=document.createElement(tag);if(cls)x.className=cls;if(text!==undefined)x.textContent=text;return x}
+function generate(){
+ const book=$('book');book.replaceChildren();pages=0;
+ for(const pool of ['SC','LC'])for(const type of ['Licensed','Unlicensed'])for(const gender of ['Girls','Boys']){
+  const subset=records.filter(r=>r.pool===pool&&r.type===type&&r.gender===gender&&(type!=='Licensed'||r.age>=8));
+  if(!subset.length)continue;
+  const ages=[...new Set(subset.map(r=>r.age))].sort((a,b)=>a-b);
+  const events=[...new Set(subset.map(r=>`${r.stroke}|${r.distance}`))].map(k=>{const [stroke,distance]=k.split('|');return {stroke,distance:Number(distance)}}).sort((a,b)=>strokeOrder[a.stroke]-strokeOrder[b.stroke]||a.distance-b.distance||a.stroke.localeCompare(b.stroke));
+  const lookup=new Map(subset.map(r=>[[r.stroke,r.distance,r.age].join('|'),r]));
+  for(let offset=0;offset<events.length;offset+=14){
+   pages++;const page=el('section','page');const head=el('div','pagehead');
+   head.append(el('strong','', 'LIMAVADY ASC  |  CLUB RECORDS'),el('span','',`${pool} • ${type} • ${gender}`));page.append(head);
+   page.append(el('div','subtitle',`${pool==='SC'?'Short':'Long'} Course / ${type} / ${gender}${offset?' (continued)':''}`));
+   const table=el('table','matrix'),thead=el('thead'),tr=el('tr');
+   tr.append(el('th','','EVENT'));ages.forEach(a=>tr.append(el('th','',String(a))));thead.append(tr);table.append(thead);
+   const body=el('tbody');
+   events.slice(offset,offset+14).forEach((ev,i)=>{
+     const row=el('tr',i===0||events[offset+i-1].stroke!==ev.stroke?'stroke-start':'');
+     row.append(el('td','',`${ev.distance}m ${ev.stroke}`));
+     ages.forEach(age=>{const cell=el('td');const r=lookup.get([ev.stroke,ev.distance,age].join('|'));
+       if(r){cell.append(el('div','cell-time',r.time),el('div','cell-name',r['Swimmer Name']),el('div','cell-meet',r.Meet));
+         cell.title=`${r.time} — ${r['Swimmer Name']} — ${r.Meet}`;}
+       row.append(cell);
+     });body.append(row);
+   });
+   table.append(body);page.append(table);page.append(el('div','foot',`Page ${pages} • Record time / swimmer / meet`));book.append(page);
+  }
+ }
+}
+$('file').addEventListener('change',()=>{$('validate').disabled=!$('file').files.length;$('publish').disabled=true;$('preview').disabled=true;$('book').replaceChildren();$('book').classList.remove('preview');$('status').textContent='Waiting'});
+$('validate').addEventListener('click',async()=>{
+ try{const text=await $('file').files[0].text();const result=validate(text);
+  records=result.output;issues=result.errs;$('count').textContent=records.length;$('dups').textContent=result.dupCount;
+  $('status').textContent=issues.length?'Blocked':'Ready';$('status').className=issues.length?'error':'success';
+  $('issues').textContent=issues.length?issues.join('\n'):`Validation passed. ${records.length} active records. Licensed ages 6–7 are excluded from publication.`;
+  $('downloadIssues').disabled=false;$('publish').disabled=!!issues.length;$('preview').disabled=!!issues.length;
+  if(!issues.length)generate();else $('book').replaceChildren();
+ }catch(e){records=[];issues=[e.message];$('count').textContent='0';$('dups').textContent='—';$('status').textContent='Blocked';$('issues').textContent=e.message;$('publish').disabled=true;$('preview').disabled=true;$('downloadIssues').disabled=false;}
+});
+$('downloadIssues').addEventListener('click',()=>{
+ const text=issues.length?issues.join('\n'):'Validation passed: no issues detected.';
+ const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='LASC_validation_report.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+$('preview').addEventListener('click',()=>{$('book').classList.toggle('preview');if($('book').classList.contains('preview'))$('book').scrollIntoView({behavior:'smooth'})});
+$('publish').addEventListener('click',()=>{if(!issues.length&&records.length)window.print()});
+</script></body></html>
