@@ -26,7 +26,7 @@ button:disabled{background:#aeb9c5;cursor:not-allowed}input[type=file]{max-width
 .cell-meet{font-size:5.3pt;color:#718397;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .foot{position:absolute;bottom:4mm;right:8mm;color:#718397;font-size:7pt}
 @page{size:A4 landscape;margin:0}
-@media print{html,body{background:white;margin:0;padding:0}.shell{display:none!important}#book{display:block!important}.page:last-child{break-after:auto;page-break-after:auto}}
+@media print{html,body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}#book,#book *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.shell{display:none!important}#book{display:block!important}.page:last-child{break-after:auto;page-break-after:auto}}
 @media screen{#book.preview{display:block}.page{margin:20px auto;box-shadow:0 2px 15px #bcc6d0;transform-origin:top center}}
 </style></head><body>
 <main class="shell">
@@ -42,8 +42,8 @@ button:disabled{background:#aeb9c5;cursor:not-allowed}input[type=file]{max-width
 <button id="downloadIssues" disabled>Download validation report</button></section>
 <section class="panel"><h2>3. Publish PDF</h2><p class="muted">Uses A4 landscape, stroke-first order, vertical dividers and compact meet names. Licensed reports show ages 8 and up.</p>
 <div class="controls"><button id="publish" disabled>Open print / Save as PDF</button><button id="preview" disabled>Preview pages</button></div>
-<p class="muted">In the print dialogue select <b>Save as PDF</b>, <b>A4</b>, <b>Landscape</b>, <b>Margins: None</b>, <b>Scale: 100%</b> and enable <b>Background graphics</b>. Disable browser headers and footers.</p>
-</section><p class="muted">LASC Record Book Publisher • Version 1.0 • Offline-capable once downloaded as an HTML file</p>
+<p class="muted">In the print dialogue select <b>Save as PDF</b>, <b>A4</b>, <b>Landscape</b>, <b>Margins: None</b>, <b>Scale: 100%</b> and enable <b>Background graphics</b> (recommended even with the print colour fix). Disable browser headers and footers.</p>
+</section><p class="muted">LASC Record Book Publisher • Version 1.2 • Offline-capable once downloaded as an HTML file</p>
 </main><div id="book"></div>
 <script>
 "use strict";
